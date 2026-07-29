@@ -1,0 +1,41 @@
+"""Python API for the Mojo VCGLib algorithm-core port."""
+
+from .core import (
+    CleanStats,
+    DecimationResult,
+    MassProperties,
+    TopologyStats,
+    clean_mesh,
+    closest_points,
+    geodesic_distance,
+    hc_smooth,
+    intersect_rays,
+    laplacian_smooth,
+    loop_subdivide,
+    mass_properties,
+    quadric_decimate,
+    sample_surface,
+    scale_dependent_smooth,
+    taubin_smooth,
+    topology_stats,
+)
+
+__all__ = [
+    "CleanStats",
+    "DecimationResult",
+    "MassProperties",
+    "TopologyStats",
+    "clean_mesh",
+    "closest_points",
+    "geodesic_distance",
+    "hc_smooth",
+    "intersect_rays",
+    "laplacian_smooth",
+    "loop_subdivide",
+    "mass_properties",
+    "quadric_decimate",
+    "sample_surface",
+    "scale_dependent_smooth",
+    "taubin_smooth",
+    "topology_stats",
+]
