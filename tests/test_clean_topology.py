@@ -55,6 +55,17 @@ def test_clean_is_idempotent():
     assert first_stats == second_stats == mvc.CleanStats(0, 0, 0, 0)
 
 
+def test_clean_face_validity_simd_body_and_tail():
+    vertices = np.array([[0.0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=float)
+    faces = np.tile(np.array([[0, 1, 2]], dtype=np.int64), (9, 1))
+    faces[-1] = [0, 0, 1]
+    _, cleaned_faces, stats = mvc.clean_mesh(
+        vertices, faces, remove_duplicate_faces=False
+    )
+    assert len(cleaned_faces) == 8
+    assert stats.degenerate_faces == 1
+
+
 def test_clean_empty_mesh():
     vertices, faces, stats = mvc.clean_mesh(
         np.empty((0, 3)), np.empty((0, 3), dtype=np.int64)

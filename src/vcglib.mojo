@@ -111,6 +111,32 @@ def zero_floats(p: FPtr, n: Int):
 
 
 @always_inline
+def fill_floats(p: FPtr, n: Int, value: Float64):
+    comptime W = simdwidthof[DType.float64]()
+    var values = SIMD[DType.float64, W](value)
+    var i = 0
+    while i + W <= n:
+        p.store(i, values)
+        i += W
+    while i < n:
+        p[i] = value
+        i += 1
+
+
+@always_inline
+def fill_ints(p: IPtr, n: Int, value: Int64):
+    comptime W = simdwidthof[DType.int64]()
+    var values = SIMD[DType.int64, W](value)
+    var i = 0
+    while i + W <= n:
+        p.store(i, values)
+        i += W
+    while i < n:
+        p[i] = value
+        i += 1
+
+
+@always_inline
 def face_is_valid(
     vertices: FPtr,
     faces: IPtr,
@@ -147,13 +173,20 @@ def mvc_face_validity_f64(
     var vertices = fp(vertices_address)
     var faces = ip(faces_address)
     var valid = ip(valid_address)
-    var kept = 0
     for f in range(face_count):
         var ok = face_is_valid(vertices, faces, f, vertex_count, epsilon)
         valid[f] = 1 if ok else 0
-        if ok:
-            kept += 1
-    return kept
+
+    comptime W = simdwidthof[DType.int64]()
+    var kept: Int64 = 0
+    var i = 0
+    while i + W <= face_count:
+        kept += valid.load[width=W](i).reduce_add()
+        i += W
+    while i < face_count:
+        kept += valid[i]
+        i += 1
+    return Int(kept)
 
 
 # vcglib: vcg/complex/algorithms/clean.h Clean::CountEdgeNum
@@ -1026,10 +1059,9 @@ def mvc_geodesic_f64(
     var heap = ip(heap_address)
     var incidence_offsets = ip(incidence_offsets_address)
     var incident_faces = ip(incident_faces_address)
-    for i in range(vertex_count):
-        distances[i] = HUGE
-        sources[i] = -1
-        visited[i] = -1
+    fill_floats(distances, vertex_count, HUGE)
+    fill_ints(sources, vertex_count, -1)
+    fill_ints(visited, vertex_count, -1)
     var heap_size = 0
     for i in range(seed_count):
         var s = Int(seeds[i])

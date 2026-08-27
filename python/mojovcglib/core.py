@@ -9,6 +9,11 @@ import numpy as np
 from ._lib import addr, f64, i64, lib
 
 
+_VERTEX_KEY_DTYPE = np.dtype(
+    [("x", np.float64), ("y", np.float64), ("z", np.float64)]
+)
+
+
 @dataclass(frozen=True)
 class CleanStats:
     duplicate_vertices: int
@@ -66,11 +71,17 @@ def _topology(faces: np.ndarray, vertex_count: int):
             np.empty((0,), dtype=np.int64),
             np.empty((0, 3), dtype=np.int64),
         )
-    following = faces[:, [1, 2, 0]]
-    low = np.minimum(faces, following)
-    high = np.maximum(faces, following)
     if vertex_count <= np.iinfo(np.int64).max // max(vertex_count, 1):
-        keys = (low * vertex_count + high).reshape(-1)
+        key_rows = np.empty_like(faces)
+        high = np.empty(len(faces), dtype=np.int64)
+        for column, following_column in ((0, 1), (1, 2), (2, 0)):
+            np.minimum(
+                faces[:, column], faces[:, following_column], out=key_rows[:, column]
+            )
+            key_rows[:, column] *= vertex_count
+            np.maximum(faces[:, column], faces[:, following_column], out=high)
+            key_rows[:, column] += high
+        keys = key_rows.reshape(-1)
         unique_keys, inverse, counts = np.unique(
             keys, return_inverse=True, return_counts=True
         )
@@ -78,7 +89,19 @@ def _topology(faces: np.ndarray, vertex_count: int):
         edges[:, 0] = unique_keys // vertex_count
         edges[:, 1] = unique_keys % vertex_count
     else:
-        canonical = np.stack((low, high), axis=2).reshape(-1, 2)
+        canonical = np.empty((faces.size, 2), dtype=np.int64)
+        canonical_rows = canonical.reshape(-1, 3, 2)
+        for column, following_column in ((0, 1), (1, 2), (2, 0)):
+            np.minimum(
+                faces[:, column],
+                faces[:, following_column],
+                out=canonical_rows[:, column, 0],
+            )
+            np.maximum(
+                faces[:, column],
+                faces[:, following_column],
+                out=canonical_rows[:, column, 1],
+            )
         edges, inverse, counts = np.unique(
             canonical, axis=0, return_inverse=True, return_counts=True
         )
@@ -111,8 +134,9 @@ def clean_mesh(
 
     mapped_faces = faces.copy()
     if remove_duplicate_vertices and len(vertices):
+        vertex_keys = vertices.view(_VERTEX_KEY_DTYPE).reshape(-1)
         _, first, inverse = np.unique(
-            vertices, axis=0, return_index=True, return_inverse=True
+            vertex_keys, return_index=True, return_inverse=True
         )
         representatives = first[inverse]
         in_range = (mapped_faces >= 0) & (mapped_faces < len(vertices))
@@ -168,7 +192,7 @@ def clean_mesh(
     remap = np.full(len(vertices), -1, dtype=np.int64)
     remap[referenced] = np.arange(referenced.sum(), dtype=np.int64)
     compact_faces = remap[mapped_faces]
-    compact_vertices = vertices[referenced].copy()
+    compact_vertices = vertices[referenced]
     unreferenced = original_vertex_count - duplicate_vertices - len(compact_vertices)
     return (
         compact_vertices,
@@ -558,11 +582,11 @@ def _link_condition(faces: np.ndarray, u: int, v: int) -> bool:
 def _quadric_decimate_unconstrained(
     vertices: np.ndarray,
     faces: np.ndarray,
+    edges: np.ndarray,
     target_faces: int,
     quadrics: np.ndarray,
 ) -> DecimationResult:
     vertex_count = len(vertices)
-    edges, _, _, _ = _topology(faces, vertex_count)
     result = np.empty(2, dtype=np.int64)
     lib().mvc_qem_decimate_unconstrained_f64(
         addr(vertices),
@@ -585,7 +609,7 @@ def _quadric_decimate_unconstrained(
     remap = np.full(vertex_count, -1, dtype=np.int64)
     remap[referenced] = np.arange(referenced.sum())
     return DecimationResult(
-        vertices[referenced].copy(),
+        vertices[referenced],
         np.ascontiguousarray(remap[faces]),
         collapsed,
     )
@@ -614,7 +638,8 @@ def quadric_decimate(
     faces = faces.copy()
     if len(faces) <= target_faces:
         return DecimationResult(vertices, faces, 0)
-    border = _border_mask(faces, len(vertices))
+    edges, _, edge_counts, face_edges = _topology(faces, len(vertices))
+    border = np.ascontiguousarray(edge_counts[face_edges] == 1, dtype=np.int64)
     quadrics = np.empty((len(vertices), 10), dtype=np.float64)
     lib().mvc_qem_init_f64(
         addr(vertices),
@@ -628,11 +653,10 @@ def quadric_decimate(
     )
     if not preserve_topology:
         return _quadric_decimate_unconstrained(
-            vertices, faces, target_faces, quadrics
+            vertices, faces, edges, target_faces, quadrics
         )
     alive = np.ones(len(vertices), dtype=bool)
     collapsed = 0
-    edges, _, _, _ = _topology(faces, len(vertices))
     positions = np.empty((len(edges), 3), dtype=np.float64)
     errors = np.empty(len(edges), dtype=np.float64)
     while len(faces) > target_faces:
@@ -705,7 +729,7 @@ def quadric_decimate(
     remap = np.full(len(vertices), -1, dtype=np.int64)
     remap[referenced] = np.arange(referenced.sum())
     return DecimationResult(
-        vertices[referenced].copy(),
+        vertices[referenced],
         np.ascontiguousarray(remap[faces]),
         collapsed,
     )

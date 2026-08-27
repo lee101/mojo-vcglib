@@ -123,13 +123,13 @@ is slower.
 
 | Operation | Mojo ms | Reference ms | Speedup |
 |---|---:|---:|---:|
-| clean duplicate mesh (10k faces) | 6.362 | 10.680 | 1.68x |
-| Taubin, 2 steps (9.5k faces) | 9.281 | 14.505 | 1.56x |
-| Loop subdivision (722 faces) | 1.186 | 3.550 | 2.99x |
-| geodesic, 625 vertices | 1.703 | 2.614 | 1.53x |
-| QEM, 242 to 180 faces | 2.188 | 3.735 | 1.71x |
-| closest, 400x722 | 14.610 | 215.697 | 14.76x |
-| mass properties (722 faces) | 0.127 | 0.871 | 6.83x |
+| clean duplicate mesh (10k faces) | 5.303 | 9.736 | 1.84x |
+| Taubin, 2 steps (9.5k faces) | 4.107 | 8.651 | 2.11x |
+| Loop subdivision (722 faces) | 0.690 | 2.035 | 2.95x |
+| geodesic, 625 vertices | 0.950 | 1.747 | 1.84x |
+| QEM, 242 to 180 faces | 0.826 | 1.753 | 2.12x |
+| closest, 400x722 | 14.626 | 189.027 | 12.92x |
+| mass properties (722 faces) | 0.110 | 0.602 | 5.47x |
 
 GPU execution is intentionally not enabled. Cleanup and smoothing are
 memory/scatter-bound, geodesic traversal is dependency-heavy, and the QEM
@@ -139,6 +139,10 @@ path is already far beyond the optimization target and transferring these
 benchmark-sized buffers would not be justified.
 
 The CPU path uses compact integer topology keys, CSR adjacency for geodesic
-visits, and an in-kernel QEM collapse controller. Contiguous copies, clears, and
-quadric accumulation use native-width SIMD with scalar tails; face validation
-switches to synchronous CPU parallelism at 32,768 faces.
+visits, and an in-kernel QEM collapse controller. Contiguous copies, clears,
+geodesic initialization, face-validity reduction, and quadric accumulation use
+native-width SIMD with scalar tails. QEM reuses its initial edge topology for
+boundary classification and collapse instead of sorting the same edges twice.
+No additional threaded path was retained: smoothing uses shared scatter writes,
+geodesic and QEM collapse are dependency-heavy, and the independent benchmark
+batches are below a size where thread-launch overhead is justified.
