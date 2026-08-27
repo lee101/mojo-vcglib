@@ -6,7 +6,6 @@ allocation; the numerical loops remain here.
 """
 
 from std.math import sqrt, cos, acos, sin
-from std.algorithm import sync_parallelize
 from std.sys.info import simd_width_of as simdwidthof
 
 comptime FPtr = UnsafePointer[Float64, AnyOrigin[mut=True]]
@@ -148,27 +147,6 @@ def mvc_face_validity_f64(
     var vertices = fp(vertices_address)
     var faces = ip(faces_address)
     var valid = ip(valid_address)
-    if face_count >= 32768:
-        def validate_face(f: Int) capturing:
-            var thread_vertices = fp(vertices_address)
-            var thread_faces = ip(faces_address)
-            var thread_valid = ip(valid_address)
-            thread_valid[f] = 1 if face_is_valid(
-                thread_vertices, thread_faces, f, vertex_count, epsilon
-            ) else 0
-
-        sync_parallelize[validate_face](face_count)
-        comptime W = simdwidthof[DType.int64]()
-        var kept_vector = Int64(0)
-        var i = 0
-        while i + W <= face_count:
-            kept_vector += valid.load[width=W](i).reduce_add()
-            i += W
-        while i < face_count:
-            kept_vector += valid[i]
-            i += 1
-        return Int(kept_vector)
-
     var kept = 0
     for f in range(face_count):
         var ok = face_is_valid(vertices, faces, f, vertex_count, epsilon)
