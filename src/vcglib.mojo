@@ -22,7 +22,7 @@ def ip(address: Int) -> IPtr:
     return IPtr(unsafe_from_address=address)
 
 
-struct V3(Copyable, Movable, ImplicitlyCopyable, ImplicitlyDeletable):
+struct V3(Copyable, Movable, ImplicitlyCopyable):
     var x: Float64
     var y: Float64
     var z: Float64
@@ -1340,10 +1340,10 @@ def qem_candidate(
                 + r0 * (a01 * a12 - a11 * a02)
             )
             position = V3(dx / det, dy / det, dz / det)
-    var error = max(epsilon, quadric_apply(q, u, v, position))
-    if error <= epsilon:
-        error *= (load_v(vertices, u) - load_v(vertices, v)).norm()
-    return (position, error)
+    var priority = max(epsilon, quadric_apply(q, u, v, position))
+    if priority <= epsilon:
+        priority *= (load_v(vertices, u) - load_v(vertices, v)).norm()
+    return (position, priority)
 
 
 # vcglib: vcg/complex/algorithms/local_optimization/tri_edge_collapse_quadric.h ComputePosition/ComputePriority
@@ -1363,9 +1363,9 @@ def mvc_qem_evaluate_f64(
     var positions = fp(positions_address)
     var errors = fp(errors_address)
     for e in range(edge_count):
-        var position, error = qem_candidate(vertices, edges, q, e, epsilon)
+        var position, priority = qem_candidate(vertices, edges, q, e, epsilon)
         store_v(positions, e, position)
-        errors[e] = error
+        errors[e] = priority
 
 
 @export("mvc_qem_decimate_unconstrained_f64")
@@ -1394,10 +1394,10 @@ def mvc_qem_decimate_unconstrained_f64(
         var best_error = HUGE
         var best_position = V3.zero()
         for e in range(edge_count):
-            var position, error = qem_candidate(vertices, edges, q, e, epsilon)
-            if error < best_error:
+            var position, priority = qem_candidate(vertices, edges, q, e, epsilon)
+            if priority < best_error:
                 best_edge = e
-                best_error = error
+                best_error = priority
                 best_position = position
         if best_edge < 0:
             break
