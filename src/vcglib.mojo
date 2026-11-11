@@ -90,7 +90,7 @@ def copy_vertices(src: FPtr, dst: FPtr, n: Int):
     var size = 3 * n
     var i = 0
     while i + W <= size:
-        dst.store(i, src.load[width=W](i))
+        dst.store(i, src.unsafe_load[width=W](i))
         i += W
     while i < size:
         dst[i] = src[i]
@@ -181,7 +181,7 @@ def mvc_face_validity_f64(
     var kept: Int64 = 0
     var i = 0
     while i + W <= face_count:
-        kept += valid.load[width=W](i).reduce_add()
+        kept += valid.unsafe_load[width=W](i).reduce_add()
         i += W
     while i < face_count:
         kept += valid[i]
@@ -1212,8 +1212,8 @@ def quadric_add(mut q: FPtr, index: Int, values: FPtr, value_index: Int):
     while j + W <= 10:
         q.store(
             10 * index + j,
-            q.load[width=W](10 * index + j)
-            + values.load[width=W](10 * value_index + j),
+            q.unsafe_load[width=W](10 * index + j)
+            + values.unsafe_load[width=W](10 * value_index + j),
         )
         j += W
     while j < 10:
